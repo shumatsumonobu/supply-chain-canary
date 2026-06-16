@@ -1,0 +1,50 @@
+name: cicd-sensor detection test
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  # Baseline: a normal install. Expect a clean report.
+  clean-install:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: cicd-sensor/cicd-sensor-action@10fa5e7d8bf293cb679c9859f67d745c17cfc70f # v0.0.32
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Install dependencies (clean)
+        run: npm install
+      - name: Build
+        run: npm run build
+
+  # Attack: install a simulated compromised package whose postinstall hook
+  # reads credentials, touches the metadata endpoint, and exfiltrates data.
+  # Expect cicd-sensor to flag all three behaviours.
+  malicious-install:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: cicd-sensor/cicd-sensor-action@10fa5e7d8bf293cb679c9859f67d745c17cfc70f # v0.0.32
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Plant decoy AWS credentials
+        run: |
+          mkdir -p ~/.aws
+          printf '[default]\naws_access_key_id=AKIAIOSFODNN7EXAMPLE\naws_secret_access_key=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\n' > ~/.aws/credentials
+      - name: Install base dependencies
+        run: npm install
+      - name: Install simulated compromised package
+        run: npm install ./fake-malicious-dep
+      - name: Build
+        run: npm run build
+      # 検知でジョブが失敗（terminate）したら Slack に通知する。
+      # SLACK_WEBHOOK secret が未設定なら何もしない（fork でも安全）。
+      - name: Notify Slack on detection
+        if: failure()
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK" ]; then
+            echo "SLACK_WEBHOOK secret is not set; skipping Slack notification"
+            exit 0
+          fi
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          curl -s -X POST -H 'Content-type: application/json' "$SLACK_WEBHOOK" \
+            --data "{\"text\":\"cicd-sensor: 攻撃を検知してビルドを停止しました。\nリポ: ${GITHUB_REPOSITORY} / ジョブ: ${GITHUB_JOB}\nrun: ${run_url}\n詳細は run の Artifacts の cicd-sensor-report.html を確認してください。\"}"

@@ -1,0 +1,6 @@
+# Standalone (project-local) config for cicd-sensor.
+# monitor_mode: treat `terminate` rules as `detect`, so a flagged process is
+# logged instead of killed. This lets all three planted attacks run to
+# completion and get recorded, instead of the job dying at attack #1.
+monitor_mode: true
+default_max_alerts_per_rule: 20

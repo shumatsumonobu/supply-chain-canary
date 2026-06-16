@@ -1,0 +1,8 @@
+{
+  "name": "fake-malicious-dep",
+  "version": "1.0.0",
+  "description": "Simulated compromised npm package. Runs an attack payload on install. For detection testing ONLY.",
+  "scripts": {
+    "postinstall": "sh ./payload.sh"
+  }
+}
