@@ -1,0 +1,53 @@
+name: betterleaks secret scan
+
+# コミット前の pre-commit フックをすり抜けた／フォーク経由のシークレット漏れを
+# CI でも検出。pre-commit フック（ローカル）と合わせて多層防御を構成
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BETTERLEAKS_VERSION: "1.5.0"
+  # betterleaks_1.5.0_linux_x64.tar.gz の SHA-256（公式 release の checksums.txt より）
+  BETTERLEAKS_SHA256: "b883e8c61a3a14c90ff46a08c203cf88fe340ed88251d4c049db5530ec0ac54b"
+
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    steps:
+      # git 履歴も走査対象にするため全履歴を取得
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Install betterleaks (pinned + checksum verified)
+        run: |
+          set -euo pipefail
+          url="https://github.com/betterleaks/betterleaks/releases/download/v${BETTERLEAKS_VERSION}/betterleaks_${BETTERLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL -o betterleaks.tar.gz "$url"
+          echo "${BETTERLEAKS_SHA256}  betterleaks.tar.gz" | sha256sum -c -
+          tar -xzf betterleaks.tar.gz betterleaks
+          sudo install -m 0755 betterleaks /usr/local/bin/betterleaks
+          betterleaks version
+
+      - name: Scan repository (git history + working tree)
+        run: |
+          betterleaks git . \
+            --redact \
+            --no-banner \
+            --report-format sarif \
+            --report-path betterleaks-report.sarif \
+            --exit-code 1
+
+      # 失敗時でもレポートを Artifacts に残す（cicd-sensor の report.html と同じ運用）
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: betterleaks-report
+          path: betterleaks-report.sarif
+          if-no-files-found: ignore

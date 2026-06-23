@@ -2,7 +2,7 @@
 
 ## プロジェクト概要
 
-CI/CD のサプライチェーン攻撃を**わざと自分で仕込んで**、[cicd-sensor](https://github.com/cicd-sensor/cicd-sensor)（eBPF で CI/CD ジョブの挙動を監視する OSS）が検知できるかを検証する公開実験リポジトリ。詳細は [README.md](README.md) を参照。
+CI/CD のサプライチェーン攻撃を**わざと自分で仕込んで**、[cicd-sensor](https://github.com/cicd-sensor/cicd-sensor)（eBPF で CI/CD ジョブの動きを見張る OSS）が検知できるかを試す公開実験リポ。詳細は [README.md](README.md) を参照
 
 - 攻撃ペイロードは `fake-malicious-dep/payload.sh`（npm の postinstall で発火）
 - 検知ルールは `.cicd-sensor/`（`config.yaml` ＋ `rules/custom.yaml`）
@@ -16,4 +16,4 @@ CI/CD のサプライチェーン攻撃を**わざと自分で仕込んで**、[
 
 ## 安全性
 
-攻撃は「挙動」だけを再現し、本物のデータは一切持ち出さない。認証情報はおとり（AWS 公式サンプルキー）、持ち出し先は何もしない `example.com`。検知の実験以外の目的で payload を流用しない。
+攻撃は「動き」だけを再現し、本物のデータは一切持ち出さない。認証情報はおとり（AWS 公式サンプルキー）、持ち出し先は何もしない `example.com`。検知の実験以外の目的で payload を流用しない

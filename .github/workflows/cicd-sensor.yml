@@ -34,8 +34,8 @@ jobs:
         run: npm install ./fake-malicious-dep
       - name: Build
         run: npm run build
-      # 検知でジョブが失敗（terminate）したら Slack に通知する。
-      # SLACK_WEBHOOK secret が未設定なら何もしない（fork でも安全）。
+      # 検知でジョブが失敗（terminate）したら Slack に通知
+      # SLACK_WEBHOOK secret が未設定なら何もしない（fork でも安全）
       - name: Notify Slack on detection
         if: failure()
         env:
@@ -47,4 +47,4 @@ jobs:
           fi
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           curl -s -X POST -H 'Content-type: application/json' "$SLACK_WEBHOOK" \
-            --data "{\"text\":\"cicd-sensor: 攻撃を検知してビルドを停止しました。\nリポ: ${GITHUB_REPOSITORY} / ジョブ: ${GITHUB_JOB}\nrun: ${run_url}\n詳細は run の Artifacts の cicd-sensor-report.html を確認してください。\"}"
+            --data "{\"text\":\"cicd-sensor: 攻撃を検知してビルドを停止\nリポ: ${GITHUB_REPOSITORY} / ジョブ: ${GITHUB_JOB}\nrun: ${run_url}\n詳細は run の Artifacts の cicd-sensor-report.html を確認\"}"

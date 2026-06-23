@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+#
+# Betterleaks pre-commit hook — コミット前にステージされた変更を走査し、
+# シークレット（APIキー・トークン・パスワード等）が混ざってたらコミットを止める
+#
+# 有効化（リポジトリのルートで一度だけ実行）:
+#   git config core.hooksPath .githooks
+#
+# betterleaks のインストール: README 参照
+
+set -euo pipefail
+
+# betterleaks を PATH から探し、無ければ ~/bin にフォールバック
+if command -v betterleaks >/dev/null 2>&1; then
+  BL="$(command -v betterleaks)"
+elif [ -x "$HOME/bin/betterleaks.exe" ]; then
+  BL="$HOME/bin/betterleaks.exe"
+elif [ -x "$HOME/bin/betterleaks" ]; then
+  BL="$HOME/bin/betterleaks"
+else
+  echo "betterleaks が見つからない（インストールは README を参照）" >&2
+  echo "    （走査はスキップしてコミットを続行）" >&2
+  exit 0
+fi
+
+echo "betterleaks: ステージされた変更をシークレット走査中..."
+
+# --staged: ステージ済みの差分だけを対象（pre-commit 向け）
+# --redact: 検出したシークレットをログ上で伏字にする
+# --no-banner: バナー出力を抑制
+if ! "$BL" git --staged --redact --no-banner; then
+  echo "" >&2
+  echo "シークレットを検出したのでコミットを中止" >&2
+  echo "   - 該当箇所からシークレットを消してコミットし直す" >&2
+  echo "   - 誤検知なら、行末に \"betterleaks:allow\" を付けるか" >&2
+  echo "     .betterleaks.toml の allowlist で除外" >&2
+  echo "   - どうしても回避したい時だけ: git commit --no-verify" >&2
+  exit 1
+fi
+
+echo "betterleaks: シークレットなし"
+exit 0
