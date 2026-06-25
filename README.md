@@ -6,13 +6,13 @@
 
 ## 概要
 
-このリポは、CI/CD のサプライチェーン攻撃に**2層**（コミット時 ＋ ビルド実行時）で備える**実践ガイド** ＋ 攻撃を**自分でわざと仕込んで**検知力を試した記録
+このリポは、CI/CD のサプライチェーン攻撃に**2層**（コミット時 ＋ ビルド実行時）で備える**実践ガイド** ＋ 攻撃をわざと仕込んで検知力を試した記録
 
-- **防御は2層**（ここがこのリポの肝）
+- **防御は2層**
   - **コミット時** — シークレットの混入を [Betterleaks](https://github.com/betterleaks/betterleaks) で止める
   - **ビルド実行時** — ジョブのふるまいを [cicd-sensor](https://github.com/cicd-sensor/cicd-sensor) で見張る
   - 今回ちゃんと試したのは後者（ビルド実行時＝ランタイム層）。前者はその手前、コミット時の漏れを止める別の層
-- **cicd-sensor とは** ── CI/CD ジョブの裏側をまるっと見張る OSS
+- **cicd-sensor とは** ── CI/CD ジョブの裏側を見張る OSS
   - **何を見る** — ジョブ中のプロセス起動・通信先・ファイルアクセス
   - **どうやって** — Linux カーネルの技術 **eBPF**（カーネルから挙動をリアルタイムに捕捉する仕組み）で記録
   - **位置づけ** — PC を守る **EDR**（端末の不審な挙動を検知・対応するセキュリティ製品）の CI/CD 版
@@ -29,10 +29,10 @@
 ```mermaid
 flowchart TB
     Dev[開発者]
-    subgraph L1["① コミット時 ─ Betterleaks（シークレット混入を止める）"]
+    subgraph L1["コミット時 ─ Betterleaks（シークレット混入を止める）"]
         Hook[pre-commit フック<br/>手元でブロック] -->|git push| Scan[GitHub Actions<br/>push / PR で再走査]
     end
-    subgraph L2["② ビルド実行時 ─ cicd-sensor（ふるまいを見張る）"]
+    subgraph L2["ビルド実行時 ─ cicd-sensor（ふるまいを見張る）"]
         Build[CI ビルド<br/>npm install / build] --> Sensor[cicd-sensor（eBPF）<br/>挙動を監視]
         Sensor --> Rules[baseline ＋ カスタムルール<br/>→ 検知 / terminate]
     end
@@ -59,7 +59,7 @@ flowchart TB
 > - `.github/workflows/cicd-sensor.yml`
 > - `.cicd-sensor/`
 >
-> 以下のコード/結果のうち、ラウンド1〜4 はこのリポで取った実証（参考）
+> 以下のコード/結果のうち、1〜4 の各ステップはこのリポで取った実証（参考）
 
 | | Betterleaks（コミット時） | cicd-sensor（ビルド実行時） |
 |---|---|---|
@@ -177,7 +177,7 @@ flowchart TB
       - **secret に登録** — Settings → Secrets and variables → Actions → New repository secret → Name `SLACK_WEBHOOK` / Value: Webhook URL（URL は鍵。コードに書かず必ず secret に入れる）
       - **通知ステップを置く** — `if: failure()` の通知ステップを **cicd-sensor を回すジョブの末尾**に置く（このリポでは `malicious-install` ジョブの `Notify Slack on detection`。実装は[実ワークフロー](.github/workflows/cicd-sensor.yml)）。検知失敗時だけ投稿し、secret 未設定（fork 等）では安全にスキップする
 
-   5. **手元で再現（おまけ）** — fork → fork 先で Actions を有効化（fork はデフォルトで無効）→ push または手動実行 → clean / malicious のレポートを比較
+   5. **手元で再現** — fork → fork 先で Actions を有効化（fork はデフォルトで無効）→ push または手動実行 → clean / malicious のレポートを比較
 
 > **トラブルシュート**: コミットがブロックされない → `git config core.hooksPath` とフックの実行権限を確認／アラートが出ない → ルールの `event_type`・`condition` を確認／Action がエラー → self-hosted は特権実行が要る／checksum NG → ダウンロードし直す
 
@@ -185,21 +185,21 @@ flowchart TB
 
 ```
 .
-├── package.json                 # 本体依存（axios 0.21.4）。攻撃の起点はここではなく fake-malicious-dep 側
+├── package.json                 # 本体依存。攻撃の起点はここではなく fake-malicious-dep 側
 ├── fake-malicious-dep/          # 侵害されたパッケージを模した自作パッケージ
 │   ├── package.json             # postinstall で payload を実行
 │   └── payload.sh               # 攻撃ペイロード（3 パターン）
 ├── .cicd-sensor/
 │   ├── config.yaml              # monitor_mode: true（検知のみ・kill しない）
 │   └── rules/
-│       └── custom.yaml          # 自作の検知ルール（ラウンド2で追加）
+│       └── custom.yaml          # 自作の検知ルール（ステップ2で追加）
 ├── .env.example                 # シークレット混入を試す見本（.env にコピーして使う）
 ├── .githooks/
 │   └── pre-commit               # Betterleaks でコミット前にシークレットを走査
 ├── .github/workflows/
 │   ├── cicd-sensor.yml          # clean-install / malicious-install の 2 ジョブ
 │   └── betterleaks.yml          # push/PR でシークレット走査（2層防御の片側）
-├── results/                     # 実験で出たレポート（ラウンド1〜3 の HTML）
+├── results/                     # 実験で出たレポート（ステップ1〜3 の HTML）
 └── screenshots/                 # ビルド失敗・Slack 通知の画面（READMEで使用）
 ```
 
@@ -208,7 +208,7 @@ flowchart TB
 
 ## ルールの書き方
 
-概要の「検知は3層」の3層目＝環境固有のカスタムルール。このリポでラウンド2に足したのがこれ:
+概要の「検知は3層」の3層目＝環境固有のカスタムルール。実際に足したのがこれ:
 
 ```yaml
 rule_sets:
@@ -242,16 +242,18 @@ rule_sets:
 
 このリポのメインは**ランタイム層（cicd-sensor）**の検証。Betterleaks が守るコミット時のシークレットの漏れは、検知力の実験対象**外**
 
-**実証したこと**: ラウンド1〜4 ＝ 検知 / カスタムルールでアラート化 / `terminate` でブロック / Slack 通知
+**実証したこと**: 1〜4 の各ステップ ＝ 検知 / カスタムルールでアラート化 / `terminate` でブロック / Slack 通知
 
 **やっていないこと**（未実装）:
+
+cicd-sensor は2つの部品でできている — CI ジョブ内で検知する **Sensor**（eBPF 本体・今回使う方）と、検知ログを集めて外部（S3・GCS・Pub/Sub 等）へ流す **Manager**。このリポは Manager を使わず、レポート(HTML)＋Slack 通知だけで完結させているので、次は対象外:
 
 - **Manager 経由のリアルタイム通知 / SIEM（ログ集約・監視の基盤）連携** — 検知ログを S3・Pub/Sub 等に流す公式機能はあるが、このリポでは扱わない
 - **Slack 本文への検知詳細** — このリポの Slack 通知は「ビルド失敗＋レポートへの導線」まで。本文に「どの IP・どのルールで検知したか」まで載せたいなら Manager が必要
 
 ## 実験の狙い
 
-既知の攻撃パターンを 3 つ仕込んで、cicd-sensor が**どこまで検知できるか**を見てみる
+既知の攻撃パターンを 3 つ仕込んで、cicd-sensor が**どこまで検知できるか**を検証する
 
 | 攻撃# | 攻撃 | payload の動作 |
 |---|------|---------------|
@@ -286,11 +288,11 @@ flowchart TD
 
 ## 結果
 
-この実験の肝は「どの攻撃が**アラート**になり、どれが**観測ログ**止まりになるか」。レポート実物は [results/](results/) に置いてある（ラウンド1〜3 の HTML レポート計 5 本。ラウンド4 は Slack 通知のみでレポート無し）
+この実験の肝は「どの攻撃が**アラート**になり、どれが**観測ログ**止まりになるか」。レポート実物は [results/](results/) に置いてある（ステップ1〜3 の HTML レポート計 5 本。ステップ4 は Slack 通知のみでレポート無し）
 
 > **レポートの見方**: 上部に**アラート**、下部に**観測ログ**（全プロセス・通信・ファイルアクセス）。各イベントに `payload.sh ← node ← Runner.Worker` のような親子関係（プロセス系譜）が付く
 
-1. **ラウンド1: 標準(baseline)ルールだけ**
+1. **標準(baseline)ルールだけ**
 
    [round1-malicious-install-report.html](results/round1-malicious-install-report.html) / [round1-clean-install-report.html](results/round1-clean-install-report.html)
 
@@ -300,27 +302,27 @@ flowchart TD
    | 2 | メタデータアクセス（169.254.169.254） | **観測ログのみ**（アラートなし） | `network_connections` に `169.254.169.254:80` への `curl` がプロセス系譜つきで記録された。baseline ルールでのアラートは出ない |
    | 3 | 外部への持ち出し（example.com） | **観測ログのみ**（アラートなし） | `domain_observations` に `example.com` への `curl` がプロセス系譜つきで記録された。同上 |
 
-   攻撃2・3 にアラートが出ないのは「見逃した」からではない。メタデータアクセスや外部通信は、正常なビルドにもある。だから baseline は一律に "悪" とは判定しない。アラートにするかは環境次第 → 自分でルールを書く（ラウンド2）
+   攻撃2・3 にアラートが出ないのは「見逃した」からではない。メタデータアクセスや外部通信は、正常なビルドにもある。だから baseline は一律に "悪" とは判定しない。アラートにするかは環境次第 → 自分でルールを書く（ステップ2）
 
-2. **ラウンド2: カスタムルールを 2 本追加**
+2. **カスタムルールを 2 本追加**
 
    [round2-malicious-install-report.html](results/round2-malicious-install-report.html) / [round2-clean-install-report.html](results/round2-clean-install-report.html)
 
    `.cicd-sensor/rules/custom.yaml` に「169.254.169.254 への通信」「example.com への送信」を `detect` するルールを足して再実行した
 
-   | 攻撃# | 攻撃 | ラウンド1 | ラウンド2 |
+   | 攻撃# | 攻撃 | ステップ1 | ステップ2 |
    |---|------|----------|----------|
    | 1 | 認証情報の読み取り | baseline アラート | baseline アラート（変わらず） |
    | 2 | メタデータアクセス | 観測のみ | **`canary/custom/imds_access` がアラート発火** |
    | 3 | 外部への持ち出し | 観測のみ | **`canary/custom/external_exfil_example_com` がアラート発火** |
 
-   **3 つともアラートになった**（攻撃1 は baseline ルール、攻撃2・3 は自作のカスタムルール）。clean-install は両ラウンドとも検知ゼロ＝カスタムルールが正常なビルドを誤検知しないことも確認できた
+   **3 つともアラートになった**（攻撃1 は baseline ルール、攻撃2・3 は自作のカスタムルール）。clean-install は両ステップとも検知ゼロ＝カスタムルールが正常なビルドを誤検知しないことも確認できた
 
-3. **ラウンド3: terminate でビルドを止める**
+3. **terminate でビルドを止める**
 
    [round3-malicious-install-report.html](results/round3-malicious-install-report.html)
 
-   ラウンド2までは `action: detect`（記録するだけ）。これを `action: terminate` に変え、`config.yaml` の `monitor_mode` を `false` にすると、検知した瞬間にジョブが止まる
+   ステップ2まで `action: detect`（記録するだけ）。これを `action: terminate` に変え、`config.yaml` の `monitor_mode` を `false` にすると、検知した瞬間にジョブが止まる
 
    結果:
 
@@ -338,7 +340,7 @@ flowchart TD
    >
    > 注: enforcement（terminate）の検証は一時ブランチで実施。`main` は監視モード（`monitor_mode: true`・CI は緑）のまま。実運用ではルールを `terminate` にしてブロックする
 
-4. **ラウンド4: Slack に通知する**
+4. **Slack に通知する**
 
    最後に、ビルド失敗を Slack へ通知する。malicious-install ジョブ末尾に `if: failure()` の通知ステップを足すと、terminate で失敗したとき Slack の Webhook にこう届く:
 
